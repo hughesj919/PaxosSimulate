@@ -28,9 +28,9 @@ def main(n, f, u, b, d, w):
     elif b:
         talk(n, "b")
     elif d:
-        talk(n, "d"+str(d))
+        talk(n, "d "+str(d))
     elif w:
-        talk(n, "w"+str(w))
+        talk(n, "w "+str(w))
 
 
 def talk(n, msg):
