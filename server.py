@@ -108,7 +108,7 @@ def handledata(conn, addr):
                         if len(acceptors) >= (len(servers)//2 + 1):
                             print 'Quorum received, decided: ' + acceptVal
                             decide(acceptVal)
-            elif cmd[0] == 'decide' and not failure:
+            elif cmd[0] == 'decide' and acceptVal is not None and not failure:
                 decision = acceptVal.split()
                 writeDecision(decision)
                 if decision[0] == 'd' and origConn is not None:
@@ -155,13 +155,13 @@ def decide(val):
 def writeDecision(val):
     print 'Decide val:' + val[0] + ' ' + val[1] + ' ' + val[2]
     # if this is the first decide message make space in the log, otherwise just update
-    if len(log) <= val[2]:
-        print 'append'
+    if len(log) <= int(val[2]):
+       # print 'append ' + ' len log: ' + str(len(log)) + ' val 2: ' + str(val[2])
         log.append((val[0], float(val[1])))
     else:
-        log[val[2]] = (val[0], float(val[1]))
+        log[int(val[2])] = (val[0], float(val[1]))
     pickle.dump(log, open('log.txt', 'wb+'))
-    #resetPaxosValues()
+    resetPaxosValues()
 
 
 def resetPaxosValues():
