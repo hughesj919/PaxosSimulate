@@ -5,11 +5,12 @@ import socket
 
 tcpPort = 5000
 bufferSize = 1024
-s1 = '127.0.0.1'
-s2 = 'server2 ip here'
-s3 = 'server3 ip here'
-s4 = 'server4 ip here'
-s5 = 'server5 ip here'
+s1 = '54.173.225.121'
+s2 = '54.172.165.23'
+s3 = '54.173.208.22'
+s4 = '54.174.138.236'
+s5 = '54.172.233.23'
+servers = [s1, s2, s3, s4, s5]
 
 @click.command()
 @click.option('-n', default=0, help='This is the target server.')
@@ -35,7 +36,8 @@ def main(n, f, u, b, d, w):
 
 def talk(n, msg):
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.connect(('127.0.0.1', tcpPort))
+    print(servers[n-1])
+    s.connect((servers[n-1], tcpPort))
     s.send(msg)
     data = s.recv(bufferSize)
     s.close()
