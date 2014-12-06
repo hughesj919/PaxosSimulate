@@ -21,6 +21,7 @@ myProposal = None
 nodeid = 0
 prepAckCount = 0
 origConn = None
+decided = False
 
 s1 = '54.173.225.121'
 s2 = '54.172.165.23'
@@ -49,7 +50,7 @@ def main(m):
 def listen():
     # start up the tcp server and begin listening for requests
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.bind(('127.0.0.1', tcpPort))
+    s.bind(('', tcpPort))
     s.listen(5)
     print('Node ' + str(nodeid) + ' listening on port '+str(tcpPort) + '...')
     # loop indefinitely to keep listening for commands from client
@@ -106,14 +107,13 @@ def handledata(conn, addr):
                         acceptors.append(addr[0])
                         if len(acceptors) >= (len(servers)//2 + 1):
                             print 'Quorum received, decided: ' + acceptVal
-                            decision = acceptVal.split()
-                            decide(decision)
+                            decide(acceptVal)
             elif cmd[0] == 'decide' and not failure:
                 decision = acceptVal.split()
-                writeDecision(acceptVal.split())
-                if decision[0] == 'd':
+                writeDecision(decision)
+                if decision[0] == 'd' and origConn is not None:
                     origConn.send('Deposit ' + str(decision[1]) + ' added to log.')
-                elif decision[0] == 'w':
+                elif decision[0] == 'w' and origConn is not None:
                     origConn.send('Withdraw ' + str(decision[1]) + ' added to log.')
     conn.close()
 
@@ -128,7 +128,10 @@ def loadlog():
         print 'Log file currently empty...'
 
 def myProp():
-    return myProposal[0] + ' ' + myProposal[1]
+    if myProposal is not None:
+        return myProposal[0] + ' ' + myProposal[1]
+    else:
+        return '-1'
 
 
 def getnodeid():
@@ -147,13 +150,13 @@ def setfailure(val):
 
 def decide(val):
     for server in servers:
-        talk(server, 'decide ' + acceptVal)
+        talk(server, 'decide ' + val)
 
 def writeDecision(val):
     print 'Decide val:' + val[0] + ' ' + val[1]
     log.append((val[0], float(val[1])))
     pickle.dump(log, open('log.txt', 'wb+'))
-    resetPaxosValues()
+    #resetPaxosValues()
 
 
 def resetPaxosValues():
