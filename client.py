@@ -36,12 +36,11 @@ def main(n, f, u, b, d, w):
 
 def talk(n, msg):
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    print(servers[n-1])
     s.connect((servers[n-1], tcpPort))
     s.send(msg)
     data = s.recv(bufferSize)
     s.close()
-    print("message sent: " + str(n) + msg)
+    print("Message sent: " + str(n) + msg)
     print(data)
 
 if __name__ == '__main__':

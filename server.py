@@ -100,7 +100,7 @@ def handledata(conn, addr):
                     prevAcceptNum = acceptNum
                     prevAcceptVal = acceptVal
                     acceptNum = float(cmd[1])
-                    acceptVal = cmd[2] + ' ' + cmd[3]
+                    acceptVal = cmd[2] + ' ' + cmd[3] + ' ' + cmd[4]
                     if prevAcceptNum != acceptNum and prevAcceptVal != acceptVal:
                         accept(acceptNum, acceptVal)
                     if ballotNum == acceptNum and acceptVal == myProp() and addr[0] not in acceptors:
@@ -129,7 +129,7 @@ def loadlog():
 
 def myProp():
     if myProposal is not None:
-        return myProposal[0] + ' ' + myProposal[1]
+        return myProposal[0] + ' ' + myProposal[1] + ' ' + myProposal[2]
     else:
         return '-1'
 
@@ -153,8 +153,13 @@ def decide(val):
         talk(server, 'decide ' + val)
 
 def writeDecision(val):
-    print 'Decide val:' + val[0] + ' ' + val[1]
-    log.append((val[0], float(val[1])))
+    print 'Decide val:' + val[0] + ' ' + val[1] + ' ' + val[2]
+    # if this is the first decide message make space in the log, otherwise just update
+    if len(log) <= val[2]:
+        print 'append'
+        log.append((val[0], float(val[1])))
+    else:
+        log[val[2]] = (val[0], float(val[1]))
     pickle.dump(log, open('log.txt', 'wb+'))
     #resetPaxosValues()
 
@@ -196,7 +201,7 @@ def talk(srv, msg):
 def transactionRequest(type, amount):
     # this should start a paxos instance, if successful the transaction wins the spot, otherwise this should be called again
     global myProposal
-    myProposal = (type, amount)
+    myProposal = (type, amount, str(len(log)))
     propose()
 
 
@@ -210,7 +215,7 @@ def propose():
 
 def accept(acceptNum, acceptVal):
     for server in servers:
-        talk(server, 'accept ' + str(acceptNum) + ' ' + str(acceptVal))
+        talk(server, 'accept ' + str(acceptNum) + ' ' + str(acceptVal) + ' ' + str(len(log)))
 
 
 def getProposalValue():
