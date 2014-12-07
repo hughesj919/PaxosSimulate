@@ -21,7 +21,8 @@ myProposal = None
 nodeid = 0
 prepAckCount = 0
 origConn = None
-decided = False
+failure = False
+repropose = True
 
 s1 = '54.173.225.121'
 s2 = '54.172.165.23'
@@ -30,11 +31,6 @@ s4 = '54.174.138.236'
 s5 = '54.172.233.23'
 s6 = '127.0.0.1'
 servers = [s1, s2, s3, s4, s5]
-#servers = [s6]
-failure = False
-
-
-# we can use this flag to tell if node is currently in failure mode
 
 
 @click.command()
@@ -60,12 +56,13 @@ def listen():
 
 # this will use a new thread to handle incoming data everytime
 def handledata(conn, addr):
-    global ballotNum, acceptNum, acceptVal, prepAckCount, origConn
+    global ballotNum, acceptNum, acceptVal, prepAckCount, origConn, acceptors
     while True:
             data = conn.recv(bufferSize)
             # this is where we should do different things based on the data received, i.e. if balance request, then return balance, etc.
             # right now it just echoes the data back
-            if not data: break
+            if not data:
+                break
             print('Message Received from ' + addr[0] + ': '+data)
             cmd = data.split()
             if cmd[0] == 'f':
@@ -74,48 +71,82 @@ def handledata(conn, addr):
             elif cmd[0] == 'u':
                 setfailure(False)
                 conn.send('Node revived from failure mode.')
-            elif cmd[0] == 'b' and not failure:
-                b = balancerequest()
-                conn.send('Current Balance: ' + str(b))
-            elif cmd[0] == 'w' or cmd[0] == 'd' and not failure:
-                origConn = conn
-                transactionRequest(cmd[0], cmd[1])
-            elif cmd[0] == 'prepare' and not failure:
-                if cmd[1] > ballotNum:
-                    ballotNum = float(cmd[1])
-                    msg = 'prepack' + ' ' + str(ballotNum) + ' ' + str(acceptNum) + ' ' + str(acceptVal)
-                    talk(addr[0], msg)
-            elif cmd[0] == 'prepack' and not failure:
-                prepAckCount += 1
-                if cmd[2] != 'None' and cmd[3] != 'None':
-                    acceptValues.append((cmd[2], cmd[3]+' '+cmd[4]))
-                # if we have a quorum start accept phase
-                if prepAckCount >= (len(servers)//2 + 1):
-                    prop = getProposalValue()
-                    print 'Quorum received, starting acceptance phase with proposal: ' + prop
-                    accept(ballotNum, prop)
-            elif cmd[0] == 'accept' and not failure:
-                if cmd[1] >= ballotNum:
-                    print 'Proposal accepted with ballot: ' + cmd[1] + ' and value: ' + cmd[2] + ' ' + cmd[3]
-                    prevAcceptNum = acceptNum
-                    prevAcceptVal = acceptVal
-                    acceptNum = float(cmd[1])
-                    acceptVal = cmd[2] + ' ' + cmd[3] + ' ' + cmd[4]
-                    if prevAcceptNum != acceptNum and prevAcceptVal != acceptVal:
-                        accept(acceptNum, acceptVal)
-                    if ballotNum == acceptNum and acceptVal == myProp() and addr[0] not in acceptors:
-                        acceptors.append(addr[0])
-                        if len(acceptors) >= (len(servers)//2 + 1):
-                            print 'Quorum received, decided: ' + acceptVal
-                            decide(acceptVal)
-            elif cmd[0] == 'decide' and acceptVal is not None and not failure:
-                decision = acceptVal.split()
-                writeDecision(decision)
-                if decision[0] == 'd' and origConn is not None:
-                    origConn.send('Deposit ' + str(decision[1]) + ' added to log.')
-                elif decision[0] == 'w' and origConn is not None:
-                    origConn.send('Withdraw ' + str(decision[1]) + ' added to log.')
+            elif not failure:
+                if cmd[0] == 'b':
+                    conn.send('Current Balance: ' + str(balancerequest()))
+                elif cmd[0] == 'p':
+                    printLog(conn)
+                elif cmd[0] == 'w' or cmd[0] == 'd':
+                    origConn = conn
+                    transactionRequest(cmd[0], cmd[1])
+                elif cmd[0] == 'prepare':
+                    handlePrepare(cmd, addr)
+                elif cmd[0] == 'ack':
+                    handleAck(cmd)
+                elif cmd[0] == 'accept':
+                    handleAccept(cmd)
+                elif cmd[0] == 'accepted':
+                    handleAccepted(addr)
+                elif cmd[0] == 'decide':
+                    handleDecide()
     conn.close()
+
+
+def handlePrepare(cmd,addr):
+    global ballotNum, acceptNum, acceptVal
+    if float(cmd[1]) > ballotNum:
+        ballotNum = float(cmd[1])
+        msg = 'ack' + ' ' + str(ballotNum) + ' ' + str(acceptNum) + ' ' + str(acceptVal)
+        talk(addr[0], msg)
+
+def handleAck(cmd):
+    global prepAckCount, acceptValues, ballotNum
+    priorMajority = (prepAckCount >= (len(servers) // 2 + 1))
+    prepAckCount += 1
+    if cmd[2] != 'None' and cmd[3] != 'None':
+        acceptValues.append((cmd[2], cmd[3] + ' ' + cmd[4]))
+        # vif we have a quorum start accept phase
+    if (prepAckCount >= (len(servers) // 2 + 1)) and not priorMajority:
+        prop = getProposalValue()
+        print 'Quorum received, starting acceptance phase with proposal: ' + prop
+        accept(ballotNum, prop)
+
+
+def handleAccept(cmd):
+    global ballotNum, acceptNum, acceptVal
+    if float(cmd[1]) >= ballotNum:
+        print 'Proposal accepted with ballot: ' + cmd[1] + ' and value: ' + cmd[2] + ' ' + cmd[3] + ' ' + cmd[4]
+        acceptNum = float(cmd[1])
+        acceptVal = cmd[2] + ' ' + cmd[3] + ' ' + cmd[4]
+        accepted(acceptNum, acceptVal)
+
+
+def handleAccepted(addr):
+    global acceptors, acceptVal, ballotNum, acceptNum, repropose
+    if ballotNum == acceptNum and acceptVal == myProp() and addr[0] not in acceptors:
+        priorMajority = (len(acceptors) >= (len(servers) // 2 + 1))
+        acceptors.append(addr[0])
+        if len(acceptors) >= (len(servers) // 2 + 1) and not priorMajority:
+            print 'Quorum received, decided: ' + acceptVal
+            repropose = False
+            decide(acceptVal)
+
+
+def handleDecide():
+    global origConn, acceptVal, myProposal, repropose
+    decision = acceptVal.split()
+    writeDecision(decision)
+    if decision[0] == 'd' and origConn is not None:
+        origConn.send('Deposit ' + str(decision[1]) + ' added to log.')
+    elif decision[0] == 'w' and origConn is not None:
+        origConn.send('Withdraw ' + str(decision[1]) + ' added to log.')
+    resetPaxosValues()
+    if repropose and (myProposal is not None):
+        transactionRequest(myProposal[0], myProposal[1])
+    else:
+        myProposal = None
+        origConn = None
+        repropose = True
 
 
 def loadlog():
@@ -156,12 +187,10 @@ def writeDecision(val):
     print 'Decide val:' + val[0] + ' ' + val[1] + ' ' + val[2]
     # if this is the first decide message make space in the log, otherwise just update
     if len(log) <= int(val[2]):
-       # print 'append ' + ' len log: ' + str(len(log)) + ' val 2: ' + str(val[2])
         log.append((val[0], float(val[1])))
     else:
         log[int(val[2])] = (val[0], float(val[1]))
     pickle.dump(log, open('log.txt', 'wb+'))
-    resetPaxosValues()
 
 
 def resetPaxosValues():
@@ -201,8 +230,11 @@ def talk(srv, msg):
 def transactionRequest(type, amount):
     # this should start a paxos instance, if successful the transaction wins the spot, otherwise this should be called again
     global myProposal
-    myProposal = (type, amount, str(len(log)))
-    propose()
+    if type == 'w' and float(amount) > balancerequest():
+        origConn.send('Transaction would result in overdraft. Rejected.')
+    else:
+        myProposal = (type, amount, str(len(log)))
+        propose()
 
 
 def propose():
@@ -218,8 +250,12 @@ def accept(acceptNum, acceptVal):
         talk(server, 'accept ' + str(acceptNum) + ' ' + str(acceptVal) + ' ' + str(len(log)))
 
 
+def accepted(acceptNum, acceptVal):
+    for server in servers:
+        talk(server, 'accepted ' + str(acceptNum) + ' ' + str(acceptVal))
+
+
 def getProposalValue():
-    print acceptValues
     if len(acceptValues) > 0:
         maxBal = acceptValues[0][0]
         maxVal = acceptValues[0][1]
@@ -231,6 +267,13 @@ def getProposalValue():
         return maxVal
     else:
         return myProposal[0] + ' ' + myProposal[1]
+
+
+def printLog(conn):
+    logstr=''
+    for val in log:
+        logstr += str(val) + '\n'
+    conn.send('Log Transactions: \n' + logstr)
 
 
 if __name__ == '__main__':

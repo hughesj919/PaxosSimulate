@@ -19,7 +19,11 @@ servers = [s1, s2, s3, s4, s5]
 @click.option('-b', is_flag=True, help='This will return the account balance.')
 @click.option('-d', default=0.0, help='This will make a deposit.')
 @click.option('-w', default=0.0, help='This will make a withdrawal.')
-def main(n, f, u, b, d, w):
+@click.option('-p', is_flag=True, help='This will print all log items.')
+@click.option('-q', is_flag=True, help='This will queue a deposit or withdraw for future release.')
+@click.option('-r', is_flag=True, help='This will release all queued transactions.')
+
+def main(n, f, u, b, d, w, p, q, r):
     if n <= 0:
         print('Please enter a valid node.')
     elif f:
@@ -28,10 +32,18 @@ def main(n, f, u, b, d, w):
         talk(n, "u")
     elif b:
         talk(n, "b")
+    elif q and d:
+        talk(n, "q " + " d " + str(d))
+    elif q and w:
+        talk(n, "q " + "w " + str(w))
     elif d:
         talk(n, "d "+str(d))
     elif w:
         talk(n, "w "+str(w))
+    elif p:
+        talk(n, 'p')
+    elif r:
+        talk(n, 'r')
 
 
 def talk(n, msg):
